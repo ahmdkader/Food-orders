@@ -1,0 +1,16 @@
+{
+  "name": "ورقة الطلب",
+  "short_name": "ورقة الطلب",
+  "description": "تنظيم طلبات أكل الشركة: تصويت على المطعم، طلبات، حساب، ودفع",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3EEE1",
+  "theme_color": "#1F1B16",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
