@@ -41,7 +41,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -70,19 +70,28 @@ function todayId(){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function defaultMeta(){
-  return { date: todayId(), createdAt: Date.now(), restaurantOptions: [], deliveryFee:0, taxEnabled:false, taxPercent:14, instapayLink:'' };
+  return { date: todayId(), createdAt: Date.now(), restaurantOptions: [], deliveryFee:0, taxEnabled:false, taxPercent:14, instapayLink:'', votingLocked:false };
 }
 function defaultPerson(id){ return { id, name:'', avatar:null, vote:null, items:[], paid:false }; }
 
 /* ---------------- toast + notifications ---------------- */
-function showToast(title, body){
+function targetTabForType(type){
+  if(type==='chat') return 'chat';
+  if(type==='payment_reminder' || type==='order_arrived') return isAdmin? 'payment' : 'mybill';
+  return null;
+}
+function showToast(title, body, targetTab){
   const el = document.createElement('div');
-  el.className = 'toast card p-3 shadow-xl';
+  el.className = 'toast card p-3 shadow-xl' + (targetTab? ' cursor-pointer' : '');
   el.innerHTML = `<p class="font-bold text-sm" style="color:#1F1B16">${esc(title)}</p>${body?`<p class="text-xs text-[#6B5F4D] mt-0.5">${esc(body)}</p>`:''}`;
+  if(targetTab) el.onclick = ()=>{ setTab(targetTab); el.remove(); };
   document.getElementById('toastRoot').appendChild(el);
-  setTimeout(()=>el.remove(), 5000);
+  setTimeout(()=>el.remove(), 6000);
   if(notifPermission==='granted'){
-    try{ new Notification(title, { body, icon:'icon.svg' }); }catch(e){}
+    try{
+      const n = new Notification(title, { body, icon:'icon.svg' });
+      if(targetTab) n.onclick = ()=>{ window.focus(); setTab(targetTab); n.close(); };
+    }catch(e){}
   }
 }
 function requestNotifPermission(){
@@ -92,19 +101,19 @@ function requestNotifPermission(){
 function attachNotifications(){
   db.ref(`sessions/${sid}/notify/${myId}`).on('child_added', snap=>{
     const v = snap.val();
-    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار', v.message || '');
+    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار', v.message || '', targetTabForType(v.type));
   });
   db.ref(`sessions/${sid}/notify/all`).on('child_added', snap=>{
     const v = snap.val();
-    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار عام', v.message || '');
+    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار عام', v.message || '', targetTabForType(v.type));
   });
 }
 function notifyPayment(personId, personName){
-  db.ref(`sessions/${sid}/notify/${personId}`).push({ title:'💳 فاتورة الأكل', message:`${myPersonName()} بيفكّرك تدفع حسابك`, time: Date.now() });
+  db.ref(`sessions/${sid}/notify/${personId}`).push({ type:'payment_reminder', title:'💳 فاتورة الأكل', message:`${myPersonName()} بيفكّرك تدفع حسابك`, time: Date.now() });
   showToast('تم إرسال تذكير', `لـ ${personName}`);
 }
 function notifyAll(){
-  db.ref(`sessions/${sid}/notify/all`).push({ title:'🎉 الأوردر وصل!', message:'الأكل وصل من المطعم، اتفضلوا', time: Date.now() });
+  db.ref(`sessions/${sid}/notify/all`).push({ type:'order_arrived', title:'🎉 الأوردر وصل!', message:'الأكل وصل من المطعم، اتفضلوا', time: Date.now() });
   showToast('تم الإرسال', 'كل الزمايل هياخدوا إشعار');
 }
 function myPersonName(){ return me().name || 'الأدمن'; }
@@ -154,7 +163,10 @@ function attachSession(){
     if(me().name) renderApp();
   });
 }
-function me(){ return (people[myId]) || defaultPerson(myId); }
+function me(){
+  const p = people[myId] || defaultPerson(myId);
+  return { ...defaultPerson(myId), ...p, items: p.items||[] };
+}
 
 function renderProfileGate(){
   root.innerHTML = `
@@ -215,7 +227,7 @@ function avatarHtml(p, size){
     return `<img src="${p.avatar.value}" style="width:${size}px;height:${size}px" class="rounded-full object-cover border border-[#E7DFC9]">`;
   }
   const letter = (p&&p.name? p.name[0] : '?').toUpperCase();
-  return `<span style="width:${size}px;height:${size}px;font-size:${size*0.45}px" class="inline-flex items-center justify-center rounded-full font-bold" style="background:#E3A008;color:#1F1B16">${esc(letter)}</span>`;
+  return `<span style="width:${size}px;height:${size}px;font-size:${size*0.45}px;background:#E3A008;color:#1F1B16" class="inline-flex items-center justify-center rounded-full font-bold">${esc(letter)}</span>`;
 }
 function compressImage(dataUrl, maxW){
   maxW = maxW || 500;
@@ -263,12 +275,14 @@ function renderApp(){
         <button onclick="renderSettings()" class="p-2 hover:bg-[#332C24] rounded-lg">⚙️</button>
       </div>
     </div>
-    <nav class="max-w-2xl mx-auto px-2 pb-2 flex gap-1 overflow-x-auto">
-      ${tabs.map(t=>`<button onclick="setTab('${t.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"
-        style="${tab===t.id?'background:#E3A008;color:#1F1B16':'background:#332C24;color:#B8AD97'}">${t.icon} ${t.label}</button>`).join('')}
-    </nav>
   </header>
-  <main class="max-w-2xl mx-auto p-4 pb-24" id="tabContent"></main>
+  <main class="max-w-2xl mx-auto p-4" id="tabContent" style="padding-bottom:88px"></main>
+  <nav class="fixed bottom-0 inset-x-0 z-20 shadow-[0_-4px_16px_rgba(0,0,0,.15)]" style="background:#1F1B16;padding-bottom:env(safe-area-inset-bottom)">
+    <div class="max-w-2xl mx-auto px-1 py-2 flex gap-1 overflow-x-auto">
+      ${tabs.map(t=>`<button onclick="setTab('${t.id}')" class="flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap"
+        style="${tab===t.id?'background:#E3A008;color:#1F1B16':'background:transparent;color:#B8AD97'}"><span class="text-base">${t.icon}</span>${t.label}</button>`).join('')}
+    </div>
+  </nav>
   <div id="modalRoot"></div>`;
   renderTab();
 }
@@ -296,6 +310,8 @@ function renderVoting(){
   const total = Object.values(people).filter(p=>p.vote).length;
   const opts = meta.restaurantOptions||[];
   const leaderId = leadingOptionId();
+  const locked = !!meta.votingLocked;
+  const canAct = isAdmin || !locked;
   const optionsHtml = opts.map(o=>{
     const count = counts[o.id]||0;
     const pct = total>0? Math.round(count/total*100):0;
@@ -308,7 +324,7 @@ function renderVoting(){
     return `
     <div class="relative overflow-hidden rounded-xl border-2 border-[#E7DFC9] mb-2">
       <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s"></div>
-      <button onclick="castVote('${o.id}')" class="relative w-full flex items-center justify-between px-4 py-3">
+      <button onclick="castVote('${o.id}')" ${canAct?'':'disabled'} class="relative w-full flex items-center justify-between px-4 py-3 ${canAct?'':'opacity-70'}">
         <span class="flex items-center gap-2 font-semibold" style="color:#1F1B16">
           ${mine?'✅':'⭕'} ${esc(o.name)} ${isLeader?'👑':''} ${menuHtml}
         </span>
@@ -319,7 +335,12 @@ function renderVoting(){
 
   return `
   <div class="card p-4">
-    <h2 class="font-bold mb-3 flex items-center gap-2" style="color:#1F1B16">🗳️ نطلب من مطعم إيه النهاردة؟</h2>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-bold flex items-center gap-2" style="color:#1F1B16">🗳️ نطلب من مطعم إيه النهاردة؟</h2>
+      ${isAdmin? `<button onclick="toggleVotingLock()" class="text-xs font-bold px-2 py-1 rounded-lg" style="background:${locked?'#B3432B':'#F3EEE1'};color:${locked?'#fff':'#6B5F4D'}">${locked?'🔒 مقفول':'🔓 مفتوح'}</button>`:''}
+    </div>
+    ${locked? `<div class="text-center text-xs font-bold rounded-lg py-2 mb-3" style="background:#FDF0CC;color:#B3432B">التصويت مقفول من الأدمن${isAdmin?' — إنت لسه تقدر تصوّت/تضيف':''}</div>`:''}
+    ${canAct? `
     <div class="border-2 border-dashed border-[#E7DFC9] rounded-xl p-3 mb-4">
       <input value="${esc(newOption.name)}" oninput="newOption.name=this.value" placeholder="اسم مطعم جديد..."
         class="w-full rounded-lg border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008] mb-2">
@@ -334,11 +355,12 @@ function renderVoting(){
         ${newOption.menuValue?`<p class="text-xs text-green-700">تم إرفاق ${newOption.menuFileType==='image'?'صورة ✅':'PDF ✅'}</p>`:'<p class="text-[10px] text-[#9C9080]">الملفات الكبيرة أوي (أكتر من ٣ ميجا) الأفضل تحطها لينك</p>'}
       `:''}
       <button onclick="addOption()" class="w-full bg-[#1F1B16] text-white rounded-lg py-2 font-bold text-sm mt-1">إضافة المطعم</button>
-    </div>
+    </div>` : ''}
     ${opts.length===0? '<p class="text-sm text-[#9C9080] text-center py-4">لسه مفيش مطاعم مضافة</p>' : optionsHtml}
-    <p class="text-xs text-[#9C9080] text-center mt-2">التصويت مفتوح طول الوقت، والمطعم اللي فوق (👑) بيتحدّث أوتوماتيك حسب الأصوات</p>
+    ${!locked? '<p class="text-xs text-[#9C9080] text-center mt-2">التصويت مفتوح طول الوقت، والمطعم اللي فوق (👑) بيتحدّث أوتوماتيك حسب الأصوات</p>':''}
   </div>`;
 }
+function toggleVotingLock(){ db.ref(`sessions/${sid}/meta`).update({ votingLocked: !meta.votingLocked }); }
 function setMenuType(t){ newOption.menuType=t; renderTab(); }
 async function handleMenuFile(ev){
   const file = ev.target.files[0]; if(!file) return;
@@ -351,12 +373,13 @@ async function handleMenuFile(ev){
   renderTab();
 }
 function addOption(){
+  if(meta.votingLocked && !isAdmin) return;
   const name = (newOption.name||'').trim(); if(!name) return;
   const opt = { id: uid(), name, menuType:newOption.menuType, menuValue:newOption.menuValue, menuFileType:newOption.menuFileType };
   db.ref(`sessions/${sid}/meta/restaurantOptions`).set([...(meta.restaurantOptions||[]), opt]);
   newOption = { name:'', menuType:'none', menuValue:'', menuFileType:'' };
 }
-function castVote(id){ updateMe({ vote:id }); }
+function castVote(id){ if(meta.votingLocked && !isAdmin) return; updateMe({ vote:id }); }
 function openImagePreview(id){
   const opt = (meta.restaurantOptions||[]).find(o=>o.id===id); if(!opt) return;
   document.getElementById('modalRoot').innerHTML = `<div class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-30" onclick="closeModal()"><img src="${opt.menuValue}" class="max-w-full max-h-full rounded-lg"></div>`;
@@ -600,23 +623,27 @@ function startNewOrder(){
 /* ---------------- CHAT ---------------- */
 function renderChat(){
   return `
-  <div class="card flex flex-col" style="height:65vh">
-    <div class="flex-1 overflow-y-auto p-4 space-y-2" id="chatScroll">
+  <div class="card flex flex-col" style="height:calc(100vh - 260px)">
+    <div class="flex-1 overflow-y-auto p-3 space-y-3" id="chatScroll">
       ${chat.length===0? '<p class="text-center text-sm text-[#9C9080] mt-8">لسه مفيش رسايل</p>' :
         chat.map(m=>{
-          const mine = m.name===me().name;
-          return `<div class="flex ${mine?'justify-start':'justify-end'} items-end gap-1.5">
-            ${!mine?`<span class="text-lg">${(people[m.personId]&&avatarHtml(people[m.personId],22))||''}</span>`:''}
-            <div class="max-w-[75%] rounded-2xl px-3 py-2 text-sm" style="${mine?'background:#1F1B16;color:#fff':'background:#F3EEE1;color:#1F1B16'}">
-              ${!mine?`<p class="text-[10px] font-bold mb-0.5" style="color:#E3A008">${esc(m.name)}</p>`:''}
-              <p>${esc(m.text)}</p>
-            </div></div>`;
+          const mine = m.personId===myId;
+          const otherPerson = people[m.personId];
+          return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'}">
+            <div style="display:flex;flex-direction:row;align-items:flex-end;gap:6px;max-width:80%">
+              ${!mine?`<div style="flex-shrink:0">${avatarHtml(otherPerson,26)}</div>`:''}
+              <div class="rounded-2xl px-3 py-2 text-sm" style="${mine?'background:#1F1B16;color:#fff':'background:#F3EEE1;color:#1F1B16'}">
+                ${!mine?`<p class="text-[10px] font-bold mb-0.5" style="color:#E3A008">${esc(m.name)}</p>`:''}
+                <p style="word-break:break-word">${esc(m.text)}</p>
+              </div>
+            </div>
+          </div>`;
         }).join('')}
     </div>
-    <div class="border-t-2 border-[#E7DFC9] p-3 flex gap-2">
+    <div class="border-t-2 border-[#E7DFC9] p-2.5 flex gap-2">
       <input value="${esc(chatText)}" oninput="chatText=this.value" onkeydown="if(event.key==='Enter')sendChat()" placeholder="اكتب رسالة..."
         class="flex-1 rounded-xl border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008]">
-      <button onclick="sendChat()" class="rounded-xl px-4" style="background:#E3A008;color:#1F1B16">➤</button>
+      <button onclick="sendChat()" class="rounded-xl px-4 font-bold" style="background:#E3A008;color:#1F1B16">➤</button>
     </div>
   </div>`;
 }
@@ -625,7 +652,7 @@ function sendChat(){
   chatText='';
   db.ref(`sessions/${sid}/chat`).push({ personId:myId, name:me().name, text:t, time:Date.now() });
   Object.values(people).forEach(p=>{
-    if(p.id!==myId) db.ref(`sessions/${sid}/notify/${p.id}`).push({ title:'💬 رسالة جديدة', message:`${me().name}: ${t}`, time:Date.now() });
+    if(p.id!==myId) db.ref(`sessions/${sid}/notify/${p.id}`).push({ type:'chat', title:'💬 رسالة جديدة', message:`${me().name}: ${t}`, time:Date.now() });
   });
 }
 function scrollChatBottom(){ setTimeout(()=>{ const el=document.getElementById('chatScroll'); if(el) el.scrollTop=el.scrollHeight; },50); }
