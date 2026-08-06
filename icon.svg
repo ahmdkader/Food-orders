@@ -1,11 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#1F1B16"/>
-  <circle cx="256" cy="256" r="170" fill="#E3A008"/>
-  <g fill="#1F1B16">
-    <rect x="150" y="150" width="26" height="160" rx="8"/>
-    <rect x="196" y="150" width="26" height="80" rx="8"/>
-    <rect x="150" y="150" width="72" height="26" rx="8"/>
-    <rect x="330" y="150" width="30" height="212" rx="10"/>
-    <path d="M330 150 c40 0 40 60 0 60 z"/>
-  </g>
+  <!-- background -->
+  <rect width="512" height="512" rx="104" fill="#1F1B16"/>
+
+  <!-- soft glow -->
+  <circle cx="256" cy="240" r="200" fill="#332C24" opacity="0.4"/>
+
+  <!-- receipt / order slip -->
+  <path d="M146,104 L366,104 L366,344
+           L355,372 L344,344 L333,372 L322,344 L311,372 L300,344 L289,372 L278,344 L267,372 L256,344 L245,372 L234,344 L223,372 L212,344 L201,372 L190,344 L179,372 L168,344 L157,372 L146,344 Z"
+        fill="#FAF6EE"/>
+
+  <!-- order lines -->
+  <rect x="172" y="146" width="150" height="14" rx="7" fill="#E7DFC9"/>
+  <rect x="172" y="176" width="110" height="14" rx="7" fill="#E7DFC9"/>
+  <rect x="172" y="206" width="130" height="14" rx="7" fill="#E7DFC9"/>
+
+  <!-- total bar -->
+  <rect x="172" y="248" width="166" height="20" rx="10" fill="#F3EEE1" stroke="#E3A008" stroke-width="4"/>
+
+  <!-- confirmation badge -->
+  <circle cx="336" cy="352" r="52" fill="#E3A008" stroke="#1F1B16" stroke-width="10"/>
+  <path d="M312,352 L328,368 L362,332" fill="none" stroke="#1F1B16" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

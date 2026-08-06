@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -268,7 +268,7 @@ function renderApp(){
   <header class="sticky top-0 z-20 shadow-lg" style="background:#1F1B16;color:#FAF6EE;max-width:100vw">
     <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-2 min-w-0">
-        <div class="bg-[#E3A008] rounded-lg p-1.5 text-lg flex-shrink-0">🍽️</div>
+        <img src="icon.svg" class="w-9 h-9 rounded-lg flex-shrink-0" alt="logo">
         <div class="min-w-0"><div class="font-bold leading-none truncate">ورقة الطلب</div><div class="text-[10px] text-[#B8AD97] mt-0.5 truncate">${esc(meta.date)} · ${esc(currentRestaurantName())}</div></div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
@@ -331,6 +331,12 @@ function renderVoting(){
     if(o.menuType==='link') menuHtml = `<a href="${esc(o.menuValue)}" target="_blank" onclick="event.stopPropagation()" class="text-[11px] underline text-[#6B5F4D]">📋 المنيو</a>`;
     else if(o.menuType==='file' && o.menuFileType==='image') menuHtml = `<img src="${o.menuValue}" onclick="event.stopPropagation();openImagePreview('${o.id}')" class="w-8 h-8 rounded object-cover cursor-pointer border border-[#E7DFC9]">`;
     else if(o.menuType==='file' && o.menuFileType==='pdf') menuHtml = `<a href="${o.menuValue}" target="_blank" onclick="event.stopPropagation()" class="text-[11px] underline text-[#6B5F4D]">📄 PDF</a>`;
+    const voters = isAdmin ? Object.values(people).filter(p=>p.vote===o.id) : [];
+    const votersHtml = isAdmin ? `
+      <div class="px-4 pb-2 -mt-1 flex flex-wrap gap-1.5">
+        ${voters.length===0 ? '<span class="text-[10px] text-[#B8AD97]">محدش صوّت لسه</span>' :
+          voters.map(v=>`<span class="flex items-center gap-1 text-[10px] bg-white rounded-full pl-2 pr-1 py-0.5 border border-[#E7DFC9]">${avatarHtml(v,16)} ${esc(v.name)}</span>`).join('')}
+      </div>` : '';
     return `
     <div class="relative overflow-hidden rounded-xl border-2 border-[#E7DFC9] mb-2">
       <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s"></div>
@@ -340,6 +346,7 @@ function renderVoting(){
         </span>
         <span class="num text-sm font-bold text-[#6B5F4D]">${count} صوت · ${pct}%</span>
       </button>
+      ${votersHtml}
     </div>`;
   }).join('');
 
