@@ -13,9 +13,12 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap');
+  html,body{overflow-x:hidden; width:100%; max-width:100vw;}
   body{font-family:'IBM Plex Sans Arabic',sans-serif;background:#F3EEE1;}
   .num{font-family:'JetBrains Mono',monospace;}
   .card{background:#fff;border:2px solid #E7DFC9;border-radius:1rem;}
+  input, textarea, select { font-size:16px; } /* stops mobile auto-zoom-on-focus */
+  .flex-input{min-width:0;} /* stops inputs from overflowing flex rows */
   ::-webkit-scrollbar{width:6px}
   ::-webkit-scrollbar-thumb{background:#D8CFBB;border-radius:4px}
   @keyframes toastIn{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -23,7 +26,7 @@
 </style>
 </head>
 <body>
-<div id="root" class="min-h-screen"></div>
+<div id="root" class="min-h-screen" style="max-width:100vw;overflow-x:hidden"></div>
 <div id="toastRoot" class="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[92%] max-w-sm"></div>
 
 <script>
@@ -41,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -262,29 +265,36 @@ function renderApp(){
   const tabs = tabList();
   if(!tabs.find(t=>t.id===tab)) tab='voting';
   root.innerHTML = `
-  <header class="sticky top-0 z-20 shadow-lg" style="background:#1F1B16;color:#FAF6EE">
+  <header class="sticky top-0 z-20 shadow-lg" style="background:#1F1B16;color:#FAF6EE;max-width:100vw">
     <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <div class="bg-[#E3A008] rounded-lg p-1.5 text-lg">🍽️</div>
-        <div><div class="font-bold leading-none">ورقة الطلب</div><div class="text-[10px] text-[#B8AD97] mt-0.5">${esc(meta.date)} · ${esc(currentRestaurantName())}</div></div>
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="bg-[#E3A008] rounded-lg p-1.5 text-lg flex-shrink-0">🍽️</div>
+        <div class="min-w-0"><div class="font-bold leading-none truncate">ورقة الطلب</div><div class="text-[10px] text-[#B8AD97] mt-0.5 truncate">${esc(meta.date)} · ${esc(currentRestaurantName())}</div></div>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1 flex-shrink-0">
         <button onclick="renderProfileModal()" class="flex items-center gap-1 text-xs bg-[#332C24] px-2 py-1 rounded-full">
           ${avatarHtml(me(),18)} ${esc(me().name)} ${isAdmin?'<span class="text-[#E3A008]">👑</span>':''}
         </button>
         <button onclick="renderSettings()" class="p-2 hover:bg-[#332C24] rounded-lg">⚙️</button>
       </div>
     </div>
+    <nav class="max-w-2xl mx-auto px-2 pb-2 flex gap-1 overflow-x-auto" style="max-width:100vw">
+      ${tabs.map(t=>`<button onclick="setTab('${t.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0"
+        style="${tab===t.id?'background:#E3A008;color:#1F1B16':'background:#332C24;color:#B8AD97'}">${t.icon} ${t.label}</button>`).join('')}
+    </nav>
   </header>
-  <main class="max-w-2xl mx-auto p-4" id="tabContent" style="padding-bottom:88px"></main>
-  <nav class="fixed bottom-0 inset-x-0 z-20 shadow-[0_-4px_16px_rgba(0,0,0,.15)]" style="background:#1F1B16;padding-bottom:env(safe-area-inset-bottom)">
-    <div class="max-w-2xl mx-auto px-1 py-2 flex gap-1 overflow-x-auto">
-      ${tabs.map(t=>`<button onclick="setTab('${t.id}')" class="flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap"
-        style="${tab===t.id?'background:#E3A008;color:#1F1B16':'background:transparent;color:#B8AD97'}"><span class="text-base">${t.icon}</span>${t.label}</button>`).join('')}
-    </div>
-  </nav>
+  <main class="max-w-2xl mx-auto p-4 pb-10" id="tabContent" style="max-width:100vw"></main>
+  ${renderFooter()}
   <div id="modalRoot"></div>`;
   renderTab();
+}
+function renderFooter(){
+  return `
+  <footer class="max-w-2xl mx-auto px-4 pb-6 pt-2 text-center" style="color:#9C9080">
+    <p class="text-[11px]">© 2026 All rights reserved</p>
+    <p class="text-[11px] mt-0.5">جميع الحقوق محفوظة - أحمد عبد الرحمن - مصر - ٢٠٢٦</p>
+    <p class="text-[11px] num" dir="ltr">+2010692969992</p>
+  </footer>`;
 }
 function setTab(t){ tab=t; renderApp(); }
 function renderTab(){
@@ -394,10 +404,11 @@ function renderOrdering(){
     <h2 class="font-bold mb-1" style="color:#1F1B16">🛍️ طلبك (${esc(currentRestaurantName())})</h2>
     <p class="text-xs text-[#9C9080] mb-3">اكتب كل صنف عايزه، السعر هيتحدد بعدين</p>
     <div class="flex gap-2 mb-3">
-      <input value="${esc(itemDesc)}" oninput="itemDesc=this.value" onkeydown="if(event.key==='Enter')addItem()" placeholder="مثال: ساندوتش فراخ بانيه"
-        class="flex-1 rounded-xl border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008]">
-      <input type="number" min="1" value="${itemQty}" oninput="itemQty=this.value" class="w-16 rounded-xl border-2 border-[#E7DFC9] px-2 py-2 text-center outline-none focus:border-[#E3A008]">
-      <button onclick="addItem()" class="bg-[#1F1B16] text-white rounded-xl px-4">+</button>
+      <input id="itemDescInputField" value="${esc(itemDesc)}" oninput="itemDesc=this.value" onkeydown="if(event.key==='Enter')addItem()" placeholder="مثال: ساندوتش فراخ بانيه"
+        class="flex-1 min-w-0 rounded-xl border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008]">
+      <input id="itemQtyInputField" type="number" min="1" value="${itemQty}" oninput="itemQty=this.value" onfocus="numFocus(this)"
+        class="w-14 flex-shrink-0 rounded-xl border-2 border-[#E7DFC9] px-1 py-2 text-center outline-none focus:border-[#E3A008]">
+      <button onclick="addItem()" class="bg-[#1F1B16] text-white rounded-xl px-4 flex-shrink-0">+</button>
     </div>
     <div class="space-y-2">
       ${me().items.length===0? '<p class="text-sm text-[#9C9080] text-center py-3">لسه معملتش طلب</p>' :
@@ -423,10 +434,17 @@ function renderOrdering(){
     </div>
   </div>`;
 }
+function numFocus(el){
+  if(el.value==='0' || el.value==='0.00' || Number(el.value)===0){ el.value=''; }
+  else { const v=el.value; el.value=''; el.value=v; } /* moves cursor to end */
+}
 function addItem(){
   const d=(itemDesc||'').trim(); if(!d) return;
   updateMe({ items: [...me().items, { id:uid(), desc:d, qty:Number(itemQty)||1, price:0 }] });
   itemDesc=''; itemQty=1;
+  const dEl = document.getElementById('itemDescInputField'); if(dEl) dEl.value='';
+  const qEl = document.getElementById('itemQtyInputField'); if(qEl) qEl.value=1;
+  if(dEl) dEl.focus();
 }
 function removeItem(personId, itemId){
   if(personId!==myId && !isAdmin) return;
@@ -455,7 +473,7 @@ function renderBilling(){
           <div class="flex items-center justify-between gap-2 mb-1.5">
             <span class="text-sm text-[#6B5F4D] flex-1">${esc(i.desc)} × ${i.qty}</span>
             <div class="flex items-center gap-1">
-              <input type="number" value="${i.price}" onchange="setItemPrice('${p.id}','${i.id}',this.value)"
+              <input type="number" value="${i.price}" onchange="setItemPrice('${p.id}','${i.id}',this.value)" onfocus="numFocus(this)"
                 class="num w-20 rounded-lg border-2 border-[#E7DFC9] px-2 py-1 text-left outline-none focus:border-[#E3A008]">
               <span class="text-xs text-[#9C9080]">جنيه</span>
             </div>
@@ -464,7 +482,7 @@ function renderBilling(){
   </div>
   <div class="card p-4 mb-4">
     <label class="font-bold mb-2 flex items-center gap-2 text-sm" style="color:#1F1B16">🚚 رسوم التوصيل الإجمالية (هتتقسم على ${orders.length})</label>
-    <input type="number" value="${meta.deliveryFee}" onchange="db.ref('sessions/'+sid+'/meta').update({deliveryFee:Number(this.value)||0})"
+    <input type="number" value="${meta.deliveryFee}" onchange="db.ref('sessions/'+sid+'/meta').update({deliveryFee:Number(this.value)||0})" onfocus="numFocus(this)"
       class="num w-full rounded-xl border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008]">
   </div>
   <div class="card p-4 mb-4">
@@ -475,7 +493,7 @@ function renderBilling(){
       </button>
     </div>
     ${meta.taxEnabled? `<div class="flex items-center gap-2">
-        <input type="number" value="${meta.taxPercent}" onchange="db.ref('sessions/'+sid+'/meta').update({taxPercent:Number(this.value)||0})"
+        <input type="number" value="${meta.taxPercent}" onchange="db.ref('sessions/'+sid+'/meta').update({taxPercent:Number(this.value)||0})" onfocus="numFocus(this)"
           class="num w-24 rounded-lg border-2 border-[#E7DFC9] px-2 py-1.5 outline-none focus:border-[#E3A008]">
         <span class="text-sm text-[#6B5F4D]">% نسبة الضريبة</span></div>`:'<p class="text-xs text-[#9C9080]">فعّلها لو المطعم بيضيف ضريبة</p>'}
   </div>
@@ -561,13 +579,23 @@ function loadHistory(){
       ]);
       const mv = m.val(), pv = p.val()||{};
       if(!mv) continue;
-      const arr = Object.values(pv).filter(x=>x.items&&x.items.length>0);
-      list.push({ id:hid, meta:mv, people:arr });
+      const allPeople = Object.values(pv);
+      const arr = allPeople.filter(x=>x.items&&x.items.length>0);
+      list.push({ id:hid, meta:mv, people:arr, allPeople });
     }
     list.sort((a,b)=> (b.meta.createdAt||0) - (a.meta.createdAt||0));
     historyList = list;
     if(tab==='history') document.getElementById('tabContent').innerHTML = renderHistory();
   });
+}
+function historyRestaurantName(entry){
+  const counts = {};
+  (entry.meta.restaurantOptions||[]).forEach(o=>counts[o.id]=0);
+  (entry.allPeople||[]).forEach(p=>{ if(p.vote && counts[p.vote]!==undefined) counts[p.vote]++; });
+  let best=-1, id=null;
+  Object.entries(counts).forEach(([k,v])=>{ if(v>best){best=v; id=k;} });
+  const opt = (entry.meta.restaurantOptions||[]).find(o=>o.id===id);
+  return opt ? opt.name : (entry.meta.restaurantOptions&&entry.meta.restaurantOptions[0]? entry.meta.restaurantOptions[0].name : '-');
 }
 function historyTotal(entry){
   const savedMeta = meta; meta = entry.meta;
@@ -581,16 +609,44 @@ function renderHistory(){
   <div class="flex justify-end mb-3"><button onclick="clearAllHistory()" class="text-xs font-bold text-[#B3432B]">🗑️ مسح كل الهيستوري</button></div>
   <div class="space-y-3">
     ${historyList.map(h=>`
-      <div class="card p-4">
+      <div class="card p-4 cursor-pointer" onclick="showHistoryDetail('${h.id}')">
         <div class="flex items-center justify-between">
           <div><p class="font-bold" style="color:#1F1B16">${esc(h.meta.date)}</p>
-          <p class="text-xs text-[#9C9080]">${esc(h.meta.restaurantOptions && h.meta.restaurantOptions.length? h.meta.restaurantOptions[0].name : '')} · ${h.people.length} شخص</p></div>
+          <p class="text-xs text-[#9C9080]">${esc(historyRestaurantName(h))} · ${h.people.length} شخص</p></div>
           <div class="text-left">
             <p class="num font-bold" style="color:#1F1B16">${historyTotal(h).toFixed(2)} ج</p>
-            <button onclick="deleteHistoryEntry('${h.id}')" class="text-xs text-[#B3432B]">🗑️ مسح</button>
+            <button onclick="event.stopPropagation();deleteHistoryEntry('${h.id}')" class="text-xs text-[#B3432B]">🗑️ مسح</button>
           </div>
         </div>
       </div>`).join('')}
+  </div>`;
+}
+function showHistoryDetail(hid){
+  const entry = historyList.find(h=>h.id===hid); if(!entry) return;
+  const savedMeta = meta; meta = entry.meta;
+  const grand = entry.people.reduce((s,p)=>s+personTotal(p).total,0);
+  const rows = entry.people.map(p=>{
+    const t = personTotal(p);
+    const itemsLine = p.items.map(i=>`${esc(i.desc)} ×${i.qty} (${(i.price*i.qty).toFixed(2)} ج)`).join('، ');
+    return `<div class="border-b border-dashed border-[#E7DFC9] pb-2 mb-2 last:border-0">
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-1.5 font-semibold text-sm" style="color:#1F1B16">${avatarHtml(p,20)} ${esc(p.name)}</span>
+        <span class="num text-sm font-bold" style="color:#1F1B16">${t.total.toFixed(2)} ج ${p.paid?'<span style=\"color:#2F6B4F\">✓ مدفوع</span>':'<span style=\"color:#B3432B\">✗ لسه</span>'}</span>
+      </div>
+      <p class="text-xs text-[#9C9080] mt-1">${itemsLine}</p>
+    </div>`;
+  }).join('');
+  meta = savedMeta;
+  document.getElementById('modalRoot').innerHTML = `
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-30" onclick="closeModal()">
+    <div class="card p-5 max-w-md w-full" style="background:#FAF6EE;max-height:85vh;overflow-y-auto" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-1"><h3 class="font-bold" style="color:#1F1B16">🧾 ${esc(entry.meta.date)}</h3><button onclick="closeModal()">✕</button></div>
+      <p class="text-sm text-[#6B5F4D] mb-4">المطعم: ${esc(historyRestaurantName(entry))}</p>
+      ${rows || '<p class="text-sm text-[#9C9080] text-center py-4">مفيش طلبات مسجلة</p>'}
+      <div class="flex justify-between font-bold pt-3 mt-2 border-t-2 border-[#E7DFC9]" style="color:#1F1B16">
+        <span>الإجمالي الكلي</span><span class="num">${grand.toFixed(2)} ج</span>
+      </div>
+    </div>
   </div>`;
 }
 function deleteHistoryEntry(hid){
@@ -623,7 +679,7 @@ function startNewOrder(){
 /* ---------------- CHAT ---------------- */
 function renderChat(){
   return `
-  <div class="card flex flex-col" style="height:calc(100vh - 260px)">
+  <div class="card flex flex-col w-full min-w-0" style="height:calc(100vh - 260px)">
     <div class="flex-1 overflow-y-auto p-3 space-y-3" id="chatScroll">
       ${chat.length===0? '<p class="text-center text-sm text-[#9C9080] mt-8">لسه مفيش رسايل</p>' :
         chat.map(m=>{
@@ -642,8 +698,8 @@ function renderChat(){
     </div>
     <div class="border-t-2 border-[#E7DFC9] p-2.5 flex gap-2">
       <input value="${esc(chatText)}" oninput="chatText=this.value" onkeydown="if(event.key==='Enter')sendChat()" placeholder="اكتب رسالة..."
-        class="flex-1 rounded-xl border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008]">
-      <button onclick="sendChat()" class="rounded-xl px-4 font-bold" style="background:#E3A008;color:#1F1B16">➤</button>
+        class="flex-1 min-w-0 rounded-xl border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008]">
+      <button onclick="sendChat()" class="rounded-xl px-4 font-bold flex-shrink-0" style="background:#E3A008;color:#1F1B16">➤</button>
     </div>
   </div>`;
 }
