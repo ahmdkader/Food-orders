@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -290,10 +290,10 @@ function renderApp(){
 }
 function renderFooter(){
   return `
-  <footer class="max-w-2xl mx-auto px-4 pb-6 pt-2 text-center" style="color:#9C9080">
+  <footer class="max-w-2xl mx-auto px-4 pb-6 pt-2 text-center" style="color:#9C9080" dir="ltr">
     <p class="text-[11px]">© 2026 All rights reserved</p>
-    <p class="text-[11px] mt-0.5">جميع الحقوق محفوظة - أحمد عبد الرحمن - مصر - ٢٠٢٦</p>
-    <p class="text-[11px] num" dir="ltr">+2010692969992</p>
+    <p class="text-[11px] mt-0.5">Ahmed Abdelrahman · Egypt</p>
+    <p class="text-[11px] num mt-0.5">+201069296992</p>
   </footer>`;
 }
 function setTab(t){ tab=t; renderApp(); }
@@ -352,7 +352,7 @@ function renderVoting(){
     ${locked? `<div class="text-center text-xs font-bold rounded-lg py-2 mb-3" style="background:#FDF0CC;color:#B3432B">التصويت مقفول من الأدمن${isAdmin?' — إنت لسه تقدر تصوّت/تضيف':''}</div>`:''}
     ${canAct? `
     <div class="border-2 border-dashed border-[#E7DFC9] rounded-xl p-3 mb-4">
-      <input value="${esc(newOption.name)}" oninput="newOption.name=this.value" placeholder="اسم مطعم جديد..."
+      <input id="optNameInputField" value="${esc(newOption.name)}" oninput="newOption.name=this.value" placeholder="اسم مطعم جديد..."
         class="w-full rounded-lg border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008] mb-2">
       <div class="flex gap-1 mb-2">
         <button onclick="setMenuType('none')" class="flex-1 text-xs py-1.5 rounded-lg font-semibold" style="${newOption.menuType==='none'?'background:#1F1B16;color:#fff':'background:#F3EEE1;color:#6B5F4D'}">بدون منيو</button>
@@ -388,6 +388,7 @@ function addOption(){
   const opt = { id: uid(), name, menuType:newOption.menuType, menuValue:newOption.menuValue, menuFileType:newOption.menuFileType };
   db.ref(`sessions/${sid}/meta/restaurantOptions`).set([...(meta.restaurantOptions||[]), opt]);
   newOption = { name:'', menuType:'none', menuValue:'', menuFileType:'' };
+  const nameEl = document.getElementById('optNameInputField'); if(nameEl) nameEl.value='';
 }
 function castVote(id){ if(meta.votingLocked && !isAdmin) return; updateMe({ vote:id }); }
 function openImagePreview(id){
