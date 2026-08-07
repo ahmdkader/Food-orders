@@ -1,4 +1,4 @@
-const CACHE = 'food-order-app-v1';
+const CACHE = 'food-order-app-v2';
 const SHELL = ['./index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -13,20 +13,21 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+/* Network-first: always tries to fetch the latest version first,
+   only falls back to the cached copy if there's no internet. This
+   makes sure updates you push to GitHub show up immediately instead
+   of getting stuck on an old cached version. */
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request)
-        .then((res) => {
-          if (res && res.status === 200 && e.request.url.startsWith(self.location.origin)) {
-            const clone = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, clone));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200 && e.request.url.startsWith(self.location.origin)) {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
