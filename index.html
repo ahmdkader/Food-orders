@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -338,13 +338,13 @@ function renderVoting(){
           voters.map(v=>`<span class="flex items-center gap-1 text-[10px] bg-white rounded-full pl-2 pr-1 py-0.5 border border-[#E7DFC9]">${avatarHtml(v,16)} ${esc(v.name)}</span>`).join('')}
       </div>` : '';
     return `
-    <div class="relative overflow-hidden rounded-xl border-2 border-[#E7DFC9] mb-2">
-      <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s"></div>
-      <button onclick="castVote('${o.id}')" ${canAct?'':'disabled'} class="relative w-full flex items-center justify-between px-4 py-3 ${canAct?'':'opacity-70'}">
-        <span class="flex items-center gap-2 font-semibold" style="color:#1F1B16">
+    <div class="rounded-xl border-2 border-[#E7DFC9] mb-2 overflow-hidden">
+      <button onclick="castVote('${o.id}')" ${canAct?'':'disabled'} class="relative overflow-hidden w-full flex items-center justify-between px-4 py-3 ${canAct?'':'opacity-70'}">
+        <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s;z-index:0"></div>
+        <span class="relative flex items-center gap-2 font-semibold" style="color:#1F1B16;z-index:1">
           ${mine?'✅':'⭕'} ${esc(o.name)} ${isLeader?'👑':''} ${menuHtml}
         </span>
-        <span class="num text-sm font-bold text-[#6B5F4D]">${count} صوت · ${pct}%</span>
+        <span class="relative num text-sm font-bold text-[#6B5F4D]" style="z-index:1">${count} صوت · ${pct}%</span>
       </button>
       ${votersHtml}
     </div>`;
