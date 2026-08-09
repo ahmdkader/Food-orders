@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -55,8 +55,8 @@ let meta = null;
 let people = {};
 let chat = [];
 let historyList = [];
-let myId = localStorage.getItem('food-app-my-id');
-if(!myId){ myId = uid(); localStorage.setItem('food-app-my-id', myId); }
+let accountsList = [];
+let myId = localStorage.getItem('food-app-account-id') || null;
 let isAdmin = localStorage.getItem('food-app-is-admin') === 'true';
 let tab = 'voting';
 let notifStartTime = Date.now();
@@ -65,6 +65,8 @@ let notifPermission = (typeof Notification !== 'undefined') ? Notification.permi
 let newOption = { name:'', menuType:'none', menuValue:'', menuFileType:'' };
 let itemDesc='', itemQty=1;
 let chatText='';
+let loginMode = 'new'; // 'new' | 'existing'
+let gateAvatar = null; // set on first render of the login gate
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -149,21 +151,53 @@ function boot(){
     return db.ref(`sessions/${sid}/meta`).once('value');
   }).then(snap=>{
     if(!snap.exists()) db.ref(`sessions/${sid}/meta`).set(defaultMeta());
-    return db.ref(`sessions/${sid}/people/${myId}`).once('value');
-  }).then(snap=>{
-    attachSession();
-    attachNotifications();
-    if(!snap.exists() || !snap.val().name){ renderProfileGate(); }
-    else { renderApp(); }
+    checkLogin();
+  });
+  /* live-follow session switches: if the admin archives & starts a new order,
+     every connected device jumps to the new session automatically */
+  db.ref('current').on('value', snap=>{
+    const newSid = snap.val();
+    if(newSid && sid && newSid!==sid){
+      sid = newSid;
+      attachSession();
+      attachNotifications();
+      notifStartTime = Date.now();
+      tab = 'voting';
+      if(myId) checkLogin();
+    }
+  });
+}
+function checkLogin(){
+  if(!myId){ renderLoginGate(); return; }
+  db.ref(`accounts/${myId}`).once('value').then(snap=>{
+    if(!snap.exists()){
+      /* account no longer exists (removed by an admin, or cleared) - log out */
+      localStorage.removeItem('food-app-account-id');
+      myId = null;
+      renderLoginGate();
+      return;
+    }
+    joinSession(snap.val());
+  });
+}
+function joinSession(account){
+  db.ref(`sessions/${sid}/people/${myId}`).once('value').then(psnap=>{
+    const existing = psnap.val() || {};
+    const merged = { ...defaultPerson(myId), ...existing, items: existing.items||[], name: account.name, avatar: account.avatar };
+    db.ref(`sessions/${sid}/people/${myId}`).set(merged).then(()=>{
+      attachSession();
+      attachNotifications();
+      renderApp();
+    });
   });
 }
 function attachSession(){
-  db.ref(`sessions/${sid}/meta`).on('value', snap=>{ meta = snap.val() || defaultMeta(); if(me().name) renderApp(); });
-  db.ref(`sessions/${sid}/people`).on('value', snap=>{ people = snap.val() || {}; if(me().name) renderApp(); });
+  db.ref(`sessions/${sid}/meta`).on('value', snap=>{ meta = snap.val() || defaultMeta(); if(myId) renderApp(); });
+  db.ref(`sessions/${sid}/people`).on('value', snap=>{ people = snap.val() || {}; if(myId) renderApp(); });
   db.ref(`sessions/${sid}/chat`).on('value', snap=>{
     const val = snap.val() || {};
     chat = Object.keys(val).sort().map(k=>val[k]);
-    if(me().name) renderApp();
+    if(myId) renderApp();
   });
 }
 function me(){
@@ -171,31 +205,83 @@ function me(){
   return { ...defaultPerson(myId), ...p, items: p.items||[] };
 }
 
-function renderProfileGate(){
+/* ---------------- login / signup gate ---------------- */
+function renderLoginGate(){
+  if(!gateAvatar) gateAvatar = EMOJI_AVATARS[Math.floor(Math.random()*EMOJI_AVATARS.length)];
   root.innerHTML = `
   <div class="min-h-screen flex items-center justify-center p-6" style="background:#1F1B16">
-    <div class="card p-8 max-w-sm w-full text-center" style="background:#FAF6EE;border-color:#E3A008;border-style:dashed;border-width:3px">
-      <div class="inline-block bg-[#E3A008] rounded-full p-4 mb-3 text-3xl">🍽️</div>
-      <h1 class="text-2xl font-bold mb-1" style="color:#1F1B16">ورقة الطلب</h1>
-      <p class="text-sm text-[#6B5F4D] mb-4">اكتب اسمك واختار أفاتار</p>
-      <input id="nameInput" autofocus placeholder="اسمك..." class="w-full rounded-xl border-2 border-[#D8CFBB] px-4 py-3 text-lg text-center outline-none focus:border-[#E3A008] mb-4">
-      <div class="grid grid-cols-6 gap-2 mb-4" id="avatarGrid">
-        ${EMOJI_AVATARS.map(e=>`<button onclick="pickGateAvatar('${e}')" data-emoji="${e}" class="text-2xl rounded-lg py-1.5 border-2 border-[#E7DFC9]">${e}</button>`).join('')}
+    <div class="card p-7 max-w-sm w-full" style="background:#FAF6EE;border-color:#E3A008;border-style:dashed;border-width:3px">
+      <div class="text-center mb-4">
+        <div class="inline-block bg-[#E3A008] rounded-full p-4 mb-2 text-3xl">🍽️</div>
+        <h1 class="text-2xl font-bold" style="color:#1F1B16">ورقة الطلب</h1>
       </div>
-      <button onclick="saveProfileGate()" class="w-full bg-[#1F1B16] text-white rounded-xl py-3 font-bold">دخول</button>
+      <div class="flex gap-1 mb-4 bg-[#F3EEE1] rounded-xl p-1">
+        <button onclick="setLoginMode('new')" class="flex-1 text-sm font-bold py-2 rounded-lg" style="${loginMode==='new'?'background:#1F1B16;color:#fff':'color:#6B5F4D'}">حساب جديد</button>
+        <button onclick="setLoginMode('existing')" class="flex-1 text-sm font-bold py-2 rounded-lg" style="${loginMode==='existing'?'background:#1F1B16;color:#fff':'color:#6B5F4D'}">عندي حساب</button>
+      </div>
+      ${loginMode==='new' ? `
+        <p class="text-xs text-[#9C9080] mb-3 text-center">اسمك، أفاتار، ورقم سري بسيط (4 أرقام) عشان تقدر تدخل بنفس الحساب من أي جهاز تاني</p>
+        <input id="nameInput" placeholder="اسمك..." class="w-full rounded-xl border-2 border-[#D8CFBB] px-4 py-3 text-base text-center outline-none focus:border-[#E3A008] mb-3">
+        <div class="grid grid-cols-6 gap-2 mb-3" id="avatarGrid">
+          ${EMOJI_AVATARS.map(e=>`<button onclick="pickGateAvatar('${e}')" data-emoji="${e}" class="text-2xl rounded-lg py-1.5 border-2" style="border-color:${e===gateAvatar?'#E3A008':'#E7DFC9'}">${e}</button>`).join('')}
+        </div>
+        <input id="pinInput" type="tel" maxlength="4" placeholder="رقم سري من 4 أرقام" class="w-full rounded-xl border-2 border-[#D8CFBB] px-4 py-3 text-lg text-center num outline-none focus:border-[#E3A008] mb-4">
+        <button onclick="signup()" class="w-full bg-[#1F1B16] text-white rounded-xl py-3 font-bold">إنشاء الحساب والدخول</button>
+      ` : `
+        <p class="text-xs text-[#9C9080] mb-3 text-center">ادخل بنفس الاسم والرقم السري اللي سجّلت بيهم أول مرة</p>
+        <input id="nameInput" placeholder="اسمك..." class="w-full rounded-xl border-2 border-[#D8CFBB] px-4 py-3 text-base text-center outline-none focus:border-[#E3A008] mb-3">
+        <input id="pinInput" type="tel" maxlength="4" placeholder="الرقم السري" class="w-full rounded-xl border-2 border-[#D8CFBB] px-4 py-3 text-lg text-center num outline-none focus:border-[#E3A008] mb-4">
+        <button onclick="login()" class="w-full bg-[#1F1B16] text-white rounded-xl py-3 font-bold">دخول</button>
+      `}
+      <p id="loginError" class="text-xs text-[#B3432B] text-center mt-3"></p>
     </div>
   </div>`;
 }
-let gateAvatar = EMOJI_AVATARS[Math.floor(Math.random()*EMOJI_AVATARS.length)];
+function setLoginMode(m){ loginMode=m; renderLoginGate(); }
 function pickGateAvatar(e){
   gateAvatar = e;
   document.querySelectorAll('#avatarGrid button').forEach(b=> b.style.borderColor = (b.dataset.emoji===e?'#E3A008':'#E7DFC9'));
 }
-function saveProfileGate(){
-  const v = document.getElementById('nameInput').value.trim();
-  if(!v) return;
-  db.ref(`sessions/${sid}/people/${myId}`).set({ ...defaultPerson(myId), name:v, avatar:{type:'emoji',value:gateAvatar} });
-  setTimeout(renderApp, 150);
+function signup(){
+  const name = document.getElementById('nameInput').value.trim();
+  const pin = document.getElementById('pinInput').value.trim();
+  const err = document.getElementById('loginError');
+  if(!name){ err.textContent='اكتب اسمك الأول'; return; }
+  if(!/^[0-9]{4}$/.test(pin)){ err.textContent='الرقم السري لازم يبقى 4 أرقام'; return; }
+  db.ref('accounts').once('value').then(snap=>{
+    const accounts = snap.val() || {};
+    const clash = Object.values(accounts).find(a=>a.name===name);
+    if(clash){ err.textContent='الاسم ده مسجل بالفعل - جرب "عندي حساب" أو اسم مختلف'; return; }
+    const id = uid();
+    const account = { id, name, avatar:{type:'emoji',value:gateAvatar}, pin, createdAt: Date.now() };
+    db.ref(`accounts/${id}`).set(account).then(()=>{
+      myId = id;
+      localStorage.setItem('food-app-account-id', id);
+      joinSession(account);
+    });
+  });
+}
+function login(){
+  const name = document.getElementById('nameInput').value.trim();
+  const pin = document.getElementById('pinInput').value.trim();
+  const err = document.getElementById('loginError');
+  if(!name || !pin){ err.textContent='اكتب الاسم والرقم السري'; return; }
+  db.ref('accounts').once('value').then(snap=>{
+    const accounts = snap.val() || {};
+    const match = Object.values(accounts).find(a=>a.name===name && a.pin===pin);
+    if(!match){ err.textContent='الاسم أو الرقم السري غلط'; return; }
+    myId = match.id;
+    localStorage.setItem('food-app-account-id', match.id);
+    joinSession(match);
+  });
+}
+function logout(){
+  localStorage.removeItem('food-app-account-id');
+  myId = null;
+  isAdmin = false;
+  localStorage.removeItem('food-app-is-admin');
+  loginMode = 'existing';
+  renderLoginGate();
 }
 
 /* ---------------- data helpers ---------------- */
@@ -255,6 +341,7 @@ function tabList(){
     t.push({id:'billing',label:'الحساب',icon:'🧾'});
     t.push({id:'payment',label:'الدفع',icon:'💳'});
     t.push({id:'history',label:'الهيستوري',icon:'📜'});
+    t.push({id:'members',label:'الأعضاء',icon:'👥'});
   } else {
     t.push({id:'mybill',label:'حسابي',icon:'🧾'});
   }
@@ -305,6 +392,7 @@ function renderTab(){
   else if(tab==='payment' && isAdmin) el.innerHTML = renderPayment();
   else if(tab==='mybill' && !isAdmin) el.innerHTML = renderMyBill();
   else if(tab==='history' && isAdmin){ el.innerHTML = '<div class="text-center text-sm text-[#9C9080] py-6">بيتحمّل...</div>'; loadHistory(); }
+  else if(tab==='members' && isAdmin){ el.innerHTML = '<div class="text-center text-sm text-[#9C9080] py-6">بيتحمّل...</div>'; loadAccounts(); }
   else if(tab==='chat'){ el.innerHTML = renderChat(); scrollChatBottom(); }
 }
 
@@ -682,16 +770,12 @@ function clearAllHistory(){
   document.getElementById('tabContent').innerHTML = renderHistory();
 }
 function startNewOrder(){
-  if(!confirm('هيتحفظ الطلب الحالي في الهيستوري ويتفتح طلب جديد فاضي. متأكد؟')) return;
+  if(!confirm('هيتحفظ الطلب الحالي في الهيستوري ويتفتح طلب جديد فاضي لكل الأجهزة. متأكد؟')) return;
   db.ref(`historyIndex/${sid}`).set(true);
   const newSid = new Date().toISOString().replace(/[:.]/g,'-');
-  db.ref('current').set(newSid);
-  db.ref(`sessions/${newSid}/meta`).set(defaultMeta());
-  sid = newSid;
-  attachSession();
-  attachNotifications();
-  notifStartTime = Date.now();
-  tab = 'voting';
+  db.ref(`sessions/${newSid}/meta`).set(defaultMeta()).then(()=>{
+    db.ref('current').set(newSid); // the live /current listener switches everyone over automatically
+  });
   closeModal();
 }
 
@@ -735,6 +819,7 @@ function scrollChatBottom(){ setTimeout(()=>{ const el=document.getElementById('
 /* ---------------- PROFILE MODAL ---------------- */
 function renderProfileModal(){
   const p = me();
+  profAvatar = p.avatar;
   document.getElementById('modalRoot').innerHTML = `
   <div class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-30" onclick="closeModal()">
     <div class="card p-5 max-w-sm w-full" style="background:#FAF6EE" onclick="event.stopPropagation()">
@@ -746,11 +831,12 @@ function renderProfileModal(){
         ${EMOJI_AVATARS.map(e=>`<button onclick="pickProfAvatar('${e}')" data-emoji="${e}" class="text-2xl rounded-lg py-1.5 border-2" style="border-color:${(p.avatar&&p.avatar.value===e)?'#E3A008':'#E7DFC9'}">${e}</button>`).join('')}
       </div>
       <input type="file" accept="image/*" onchange="handleAvatarUpload(event)" class="w-full text-xs mb-3">
-      <button onclick="saveProfile()" class="w-full bg-[#1F1B16] text-white rounded-xl py-2.5 font-bold">حفظ</button>
+      <button onclick="saveProfile()" class="w-full bg-[#1F1B16] text-white rounded-xl py-2.5 font-bold mb-2">حفظ</button>
+      <button onclick="logout()" class="w-full text-xs text-[#B3432B] font-semibold py-1">تسجيل خروج</button>
     </div>
   </div>`;
 }
-let profAvatar = me().avatar;
+let profAvatar = null;
 function pickProfAvatar(e){
   profAvatar = {type:'emoji', value:e};
   document.querySelectorAll('#profAvatarGrid button').forEach(b=> b.style.borderColor = (b.dataset.emoji===e?'#E3A008':'#E7DFC9'));
@@ -765,8 +851,36 @@ async function handleAvatarUpload(ev){
 function saveProfile(){
   const name = document.getElementById('profNameInput').value.trim();
   if(!name) return;
-  updateMe({ name, avatar: profAvatar || me().avatar });
+  const avatar = profAvatar || me().avatar;
+  updateMe({ name, avatar });
+  db.ref(`accounts/${myId}`).update({ name, avatar }); // canonical copy, so it carries over to new sessions/devices
   closeModal();
+}
+
+/* ---------------- MEMBERS (admin only) ---------------- */
+function loadAccounts(){
+  db.ref('accounts').once('value').then(snap=>{
+    const val = snap.val() || {};
+    accountsList = Object.values(val).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    if(tab==='members') document.getElementById('tabContent').innerHTML = renderMembers();
+  });
+}
+function renderMembers(){
+  if(accountsList.length===0) return `<div class="card p-6 text-center text-[#9C9080]">مفيش حسابات مسجلة لسه</div>`;
+  return `
+  <div class="card p-3 mb-3"><p class="text-xs text-[#9C9080] text-center">${accountsList.length} حساب مسجل على التطبيق</p></div>
+  <div class="space-y-2">
+    ${accountsList.map(a=>`
+      <div class="card p-3 flex items-center justify-between">
+        <span class="flex items-center gap-2 font-semibold text-sm" style="color:#1F1B16">${avatarHtml(a,26)} ${esc(a.name)}${a.id===myId?' (إنت)':''}</span>
+        <button onclick="removeAccount('${a.id}','${esc(a.name)}')" class="text-xs font-bold text-[#B3432B]">🗑️ حذف</button>
+      </div>`).join('')}
+  </div>`;
+}
+function removeAccount(id, name){
+  if(id===myId){ alert('متقدرش تمسح حسابك إنت وإنت داخل بيه'); return; }
+  if(!confirm(`تمسح حساب "${name}"؟ هيتم تسجيل خروجه ومش هيقدر يدخل تاني بنفس البيانات.`)) return;
+  db.ref(`accounts/${id}`).remove().then(loadAccounts);
 }
 
 /* ---------------- SETTINGS ---------------- */
