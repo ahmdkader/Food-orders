@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -339,13 +339,16 @@ function renderVoting(){
       </div>` : '';
     return `
     <div class="rounded-xl border-2 border-[#E7DFC9] mb-2 overflow-hidden">
-      <button onclick="castVote('${o.id}')" ${canAct?'':'disabled'} class="relative overflow-hidden w-full flex items-center justify-between px-4 py-3 ${canAct?'':'opacity-70'}">
-        <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s;z-index:0"></div>
-        <span class="relative flex items-center gap-2 font-semibold" style="color:#1F1B16;z-index:1">
-          ${mine?'✅':'⭕'} ${esc(o.name)} ${isLeader?'👑':''} ${menuHtml}
-        </span>
-        <span class="relative num text-sm font-bold text-[#6B5F4D]" style="z-index:1">${count} صوت · ${pct}%</span>
-      </button>
+      <div class="flex items-stretch">
+        <button onclick="castVote('${o.id}')" ${canAct?'':'disabled'} class="relative overflow-hidden flex-1 min-w-0 flex items-center justify-between px-4 py-3 ${canAct?'':'opacity-70'}">
+          <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s;z-index:0"></div>
+          <span class="relative flex items-center gap-2 font-semibold" style="color:#1F1B16;z-index:1">
+            ${mine?'✅':'⭕'} ${esc(o.name)} ${isLeader?'👑':''} ${menuHtml}
+          </span>
+          <span class="relative num text-sm font-bold text-[#6B5F4D]" style="z-index:1">${count} صوت · ${pct}%</span>
+        </button>
+        ${isAdmin? `<button onclick="deleteOption('${o.id}','${esc(o.name)}')" class="flex-shrink-0 px-3 flex items-center justify-center text-[#B3432B]" style="background:#FDEDEA" title="مسح المطعم">🗑️</button>`:''}
+      </div>
       ${votersHtml}
     </div>`;
   }).join('');
@@ -398,6 +401,12 @@ function addOption(){
   const nameEl = document.getElementById('optNameInputField'); if(nameEl) nameEl.value='';
 }
 function castVote(id){ if(meta.votingLocked && !isAdmin) return; updateMe({ vote:id }); }
+function deleteOption(id, name){
+  if(!isAdmin) return;
+  if(!confirm(`تمسح "${name}" من قائمة التصويت؟`)) return;
+  const opts = (meta.restaurantOptions||[]).filter(o=>o.id!==id);
+  db.ref(`sessions/${sid}/meta/restaurantOptions`).set(opts);
+}
 function openImagePreview(id){
   const opt = (meta.restaurantOptions||[]).find(o=>o.id===id); if(!opt) return;
   document.getElementById('modalRoot').innerHTML = `<div class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-30" onclick="closeModal()"><img src="${opt.menuValue}" class="max-w-full max-h-full rounded-lg"></div>`;
