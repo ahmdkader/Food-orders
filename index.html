@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -455,26 +455,29 @@ function numFocus(el){
   if(el.value==='0' || el.value==='0.00' || Number(el.value)===0){ el.value=''; }
   else { const v=el.value; el.value=''; el.value=v; } /* moves cursor to end */
 }
+function itemsArr(curr){ return Array.isArray(curr) ? curr : (curr ? Object.values(curr) : []); }
 function addItem(){
   const d=(itemDesc||'').trim(); if(!d) return;
-  updateMe({ items: [...me().items, { id:uid(), desc:d, qty:Number(itemQty)||1, price:0 }] });
+  const newItem = { id:uid(), desc:d, qty:Number(itemQty)||1, price:0 };
   itemDesc=''; itemQty=1;
   const dEl = document.getElementById('itemDescInputField'); if(dEl) dEl.value='';
   const qEl = document.getElementById('itemQtyInputField'); if(qEl) qEl.value=1;
   if(dEl) dEl.focus();
+  /* transaction = atomic read-modify-write, so two quick adds in a row
+     can never overwrite each other (unlike a plain .set() of a locally-cached array) */
+  db.ref(`sessions/${sid}/people/${myId}/items`).transaction(curr => itemsArr(curr).concat([newItem]));
 }
 function removeItem(personId, itemId){
   if(personId!==myId && !isAdmin) return;
-  const p = people[personId]; if(!p) return;
-  db.ref(`sessions/${sid}/people/${personId}/items`).set(p.items.filter(i=>i.id!==itemId));
+  db.ref(`sessions/${sid}/people/${personId}/items`).transaction(curr => itemsArr(curr).filter(i=>i.id!==itemId));
 }
 function editItemAdmin(personId, itemId){
   const p = people[personId]; if(!p) return;
-  const item = p.items.find(i=>i.id===itemId); if(!item) return;
+  const item = (p.items||[]).find(i=>i.id===itemId); if(!item) return;
   const newDesc = prompt('تعديل الصنف:', item.desc); if(newDesc===null) return;
   const newQty = prompt('العدد:', item.qty); if(newQty===null) return;
-  const items = p.items.map(i=> i.id===itemId? {...i, desc:newDesc.trim()||item.desc, qty:Number(newQty)||item.qty} : i);
-  db.ref(`sessions/${sid}/people/${personId}/items`).set(items);
+  db.ref(`sessions/${sid}/people/${personId}/items`).transaction(curr =>
+    itemsArr(curr).map(i=> i.id===itemId? {...i, desc:newDesc.trim()||item.desc, qty:Number(newQty)||item.qty} : i));
 }
 
 /* ---------------- BILLING (admin only, always live) ---------------- */
@@ -522,9 +525,8 @@ function renderBilling(){
   </div>`;
 }
 function setItemPrice(personId,itemId,price){
-  const p = people[personId]; if(!p) return;
-  const items = p.items.map(i=> i.id===itemId? {...i, price:Number(price)||0} : i);
-  db.ref(`sessions/${sid}/people/${personId}/items`).set(items);
+  db.ref(`sessions/${sid}/people/${personId}/items`).transaction(curr =>
+    itemsArr(curr).map(i=> i.id===itemId? {...i, price:Number(price)||0} : i));
 }
 
 /* ---------------- PAYMENT (admin: everyone, with notify) ---------------- */
