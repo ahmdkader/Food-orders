@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -85,13 +85,42 @@ function targetTabForType(type){
   if(type==='payment_reminder' || type==='order_arrived') return isAdmin? 'payment' : 'mybill';
   return null;
 }
-function showToast(title, body, targetTab){
+
+/* ---------------- notification sound (works even without OS notification permission) ---------------- */
+let audioCtx = null;
+function ensureAudio(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  }
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+}
+function playBeep(urgent){
+  ensureAudio();
+  if(!audioCtx || audioCtx.state!=='running') return;
+  const times = urgent ? [0, 0.18] : [0];
+  times.forEach(t=>{
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = urgent ? 990 : 880;
+    g.gain.value = 0.001;
+    o.connect(g); g.connect(audioCtx.destination);
+    const start = audioCtx.currentTime + t;
+    o.start(start);
+    g.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+    o.stop(start + 0.34);
+  });
+}
+
+function showToast(title, body, targetTab, urgent){
   const el = document.createElement('div');
   el.className = 'toast card p-3 shadow-xl' + (targetTab? ' cursor-pointer' : '');
   el.innerHTML = `<p class="font-bold text-sm" style="color:#1F1B16">${esc(title)}</p>${body?`<p class="text-xs text-[#6B5F4D] mt-0.5">${esc(body)}</p>`:''}`;
   if(targetTab) el.onclick = ()=>{ setTab(targetTab); el.remove(); };
   document.getElementById('toastRoot').appendChild(el);
   setTimeout(()=>el.remove(), 6000);
+  playBeep(urgent);
   if(notifPermission==='granted'){
     try{
       const n = new Notification(title, { body, icon:'icon.svg' });
@@ -100,17 +129,18 @@ function showToast(title, body, targetTab){
   }
 }
 function requestNotifPermission(){
+  ensureAudio();
   if(typeof Notification==='undefined'){ alert('المتصفح ده مش بيدعم الإشعارات'); return; }
   Notification.requestPermission().then(p=>{ notifPermission=p; renderApp(); });
 }
 function attachNotifications(){
   db.ref(`sessions/${sid}/notify/${myId}`).on('child_added', snap=>{
     const v = snap.val();
-    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار', v.message || '', targetTabForType(v.type));
+    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار', v.message || '', targetTabForType(v.type), v.type==='payment_reminder'||v.type==='order_arrived');
   });
   db.ref(`sessions/${sid}/notify/all`).on('child_added', snap=>{
     const v = snap.val();
-    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار عام', v.message || '', targetTabForType(v.type));
+    if(v && v.time > notifStartTime) showToast(v.title || '🔔 إشعار عام', v.message || '', targetTabForType(v.type), v.type==='order_arrived');
   });
 }
 function notifyPayment(personId, personName){
@@ -928,6 +958,7 @@ function tryAdminLogin(){
 /* ---------------- go ---------------- */
 initFirebase();
 if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+document.addEventListener('click', function unlockAudioOnce(){ ensureAudio(); document.removeEventListener('click', unlockAudioOnce); }, { once:true });
 </script>
 </body>
 </html>
