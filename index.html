@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -75,7 +75,7 @@ function todayId(){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function defaultMeta(){
-  return { date: todayId(), createdAt: Date.now(), restaurantOptions: [], deliveryFee:0, taxEnabled:false, taxPercent:14, instapayLink:'', votingLocked:false };
+  return { date: todayId(), createdAt: Date.now(), restaurantOptions: [], deliveryFee:0, taxEnabled:false, taxPercent:14, instapayLink:'', votingLocked:false, optionsLocked:false };
 }
 function defaultPerson(id){ return { id, name:'', avatar:null, vote:null, items:[], paid:false }; }
 
@@ -408,8 +408,10 @@ function renderVoting(){
   const total = Object.values(people).filter(p=>p.vote).length;
   const opts = meta.restaurantOptions||[];
   const leaderId = leadingOptionId();
-  const locked = !!meta.votingLocked;
-  const canAct = isAdmin || !locked;
+  const votingLocked = !!meta.votingLocked;
+  const optionsLocked = !!meta.optionsLocked;
+  const canVote = isAdmin || !votingLocked;
+  const canAddOptions = isAdmin || !optionsLocked;
   const optionsHtml = opts.map(o=>{
     const count = counts[o.id]||0;
     const pct = total>0? Math.round(count/total*100):0;
@@ -428,7 +430,7 @@ function renderVoting(){
     return `
     <div class="rounded-xl border-2 border-[#E7DFC9] mb-2 overflow-hidden">
       <div class="flex items-stretch">
-        <button onclick="castVote('${o.id}')" ${canAct?'':'disabled'} class="relative overflow-hidden flex-1 min-w-0 flex items-center justify-between px-4 py-3 ${canAct?'':'opacity-70'}">
+        <button onclick="castVote('${o.id}')" ${canVote?'':'disabled'} class="relative overflow-hidden flex-1 min-w-0 flex items-center justify-between px-4 py-3 ${canVote?'':'opacity-70'}">
           <div class="absolute inset-y-0 right-0" style="width:${pct}%;background:#FDF0CC;transition:width .3s;z-index:0"></div>
           <span class="relative flex items-center gap-2 font-semibold" style="color:#1F1B16;z-index:1">
             ${mine?'✅':'⭕'} ${esc(o.name)} ${isLeader?'👑':''} ${menuHtml}
@@ -445,10 +447,15 @@ function renderVoting(){
   <div class="card p-4">
     <div class="flex items-center justify-between mb-3">
       <h2 class="font-bold flex items-center gap-2" style="color:#1F1B16">🗳️ نطلب من مطعم إيه النهاردة؟</h2>
-      ${isAdmin? `<button onclick="toggleVotingLock()" class="text-xs font-bold px-2 py-1 rounded-lg" style="background:${locked?'#B3432B':'#F3EEE1'};color:${locked?'#fff':'#6B5F4D'}">${locked?'🔒 مقفول':'🔓 مفتوح'}</button>`:''}
+      ${isAdmin? `
+      <div class="flex gap-1">
+        <button onclick="toggleOptionsLock()" class="text-[10px] font-bold px-2 py-1 rounded-lg" style="background:${optionsLocked?'#B3432B':'#F3EEE1'};color:${optionsLocked?'#fff':'#6B5F4D'}" title="قفل إضافة مطاعم جديدة">${optionsLocked?'🔒 المطاعم':'🔓 المطاعم'}</button>
+        <button onclick="toggleVotingLock()" class="text-[10px] font-bold px-2 py-1 rounded-lg" style="background:${votingLocked?'#B3432B':'#F3EEE1'};color:${votingLocked?'#fff':'#6B5F4D'}" title="قفل التصويت نفسه">${votingLocked?'🔒 التصويت':'🔓 التصويت'}</button>
+      </div>`:''}
     </div>
-    ${locked? `<div class="text-center text-xs font-bold rounded-lg py-2 mb-3" style="background:#FDF0CC;color:#B3432B">التصويت مقفول من الأدمن${isAdmin?' — إنت لسه تقدر تصوّت/تضيف':''}</div>`:''}
-    ${canAct? `
+    ${votingLocked? `<div class="text-center text-xs font-bold rounded-lg py-2 mb-2" style="background:#FDF0CC;color:#B3432B">التصويت مقفول من الأدمن${isAdmin?' — إنت لسه تقدر تصوّت':''}</div>`:''}
+    ${optionsLocked && !votingLocked? `<div class="text-center text-xs font-bold rounded-lg py-2 mb-2" style="background:#FDF0CC;color:#B3432B">إضافة مطاعم جديدة مقفولة من الأدمن${isAdmin?' — إنت لسه تقدر تضيف':''}</div>`:''}
+    ${canAddOptions? `
     <div class="border-2 border-dashed border-[#E7DFC9] rounded-xl p-3 mb-4">
       <input id="optNameInputField" value="${esc(newOption.name)}" oninput="newOption.name=this.value" placeholder="اسم مطعم جديد..."
         class="w-full rounded-lg border-2 border-[#E7DFC9] px-3 py-2 outline-none focus:border-[#E3A008] mb-2">
@@ -465,10 +472,11 @@ function renderVoting(){
       <button onclick="addOption()" class="w-full bg-[#1F1B16] text-white rounded-lg py-2 font-bold text-sm mt-1">إضافة المطعم</button>
     </div>` : ''}
     ${opts.length===0? '<p class="text-sm text-[#9C9080] text-center py-4">لسه مفيش مطاعم مضافة</p>' : optionsHtml}
-    ${!locked? '<p class="text-xs text-[#9C9080] text-center mt-2">التصويت مفتوح طول الوقت، والمطعم اللي فوق (👑) بيتحدّث أوتوماتيك حسب الأصوات</p>':''}
+    ${!votingLocked? '<p class="text-xs text-[#9C9080] text-center mt-2">التصويت مفتوح طول الوقت، والمطعم اللي فوق (👑) بيتحدّث أوتوماتيك حسب الأصوات</p>':''}
   </div>`;
 }
 function toggleVotingLock(){ db.ref(`sessions/${sid}/meta`).update({ votingLocked: !meta.votingLocked }); }
+function toggleOptionsLock(){ db.ref(`sessions/${sid}/meta`).update({ optionsLocked: !meta.optionsLocked }); }
 function setMenuType(t){ newOption.menuType=t; renderTab(); }
 async function handleMenuFile(ev){
   const file = ev.target.files[0]; if(!file) return;
@@ -481,7 +489,7 @@ async function handleMenuFile(ev){
   renderTab();
 }
 function addOption(){
-  if(meta.votingLocked && !isAdmin) return;
+  if(meta.optionsLocked && !isAdmin) return;
   const name = (newOption.name||'').trim(); if(!name) return;
   const opt = { id: uid(), name, menuType:newOption.menuType, menuValue:newOption.menuValue, menuFileType:newOption.menuFileType };
   db.ref(`sessions/${sid}/meta/restaurantOptions`).set([...(meta.restaurantOptions||[]), opt]);
