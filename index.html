@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -56,6 +56,8 @@ let people = {};
 let chat = [];
 let historyList = [];
 let accountsList = [];
+let savedRestaurants = [];
+let showSavedPanel = false;
 let myId = localStorage.getItem('food-app-account-id') || null;
 let isAdmin = localStorage.getItem('food-app-is-admin') === 'true';
 let tab = 'voting';
@@ -195,6 +197,12 @@ function boot(){
       tab = 'voting';
       if(myId) checkLogin();
     }
+  });
+  /* global library of saved restaurants, reusable across order sessions */
+  db.ref('savedRestaurants').on('value', snap=>{
+    const val = snap.val();
+    savedRestaurants = val ? Object.values(val) : [];
+    if(myId && tab==='voting') renderTab();
   });
 }
 function checkLogin(){
@@ -499,14 +507,29 @@ function renderVoting(){
         <input type="file" accept="image/*,.pdf,application/pdf" onchange="handleMenuFile(event)" class="w-full text-xs mb-1">
         ${newOption.menuValue?`<p class="text-xs text-green-700">تم إرفاق ${newOption.menuFileType==='image'?'صورة ✅':'PDF ✅'}</p>`:'<p class="text-[10px] text-[#9C9080]">الملفات الكبيرة أوي (أكتر من ٣ ميجا) الأفضل تحطها لينك</p>'}
       `:''}
+      <label class="flex items-center gap-1.5 text-[11px] text-[#6B5F4D] mt-2 mb-1">
+        <input type="checkbox" id="saveOptionCheckbox" checked> 💾 احفظه في قائمة المطاعم عشان تستخدمه تاني بسهولة
+      </label>
       <button onclick="addOption()" class="w-full bg-[#1F1B16] text-white rounded-lg py-2 font-bold text-sm mt-1">إضافة المطعم</button>
-    </div>` : ''}
+    </div>
+    ${savedRestaurants.length>0? `
+      <button onclick="toggleSavedPanel()" class="w-full text-xs font-bold text-[#6B5F4D] mb-2 flex items-center justify-center gap-1">
+        📚 اختار من المطاعم المحفوظة (${savedRestaurants.length}) ${showSavedPanel?'▲':'▼'}
+      </button>
+      ${showSavedPanel? `<div class="flex flex-wrap gap-1.5 mb-4 p-3 rounded-xl" style="background:#FDF6E5">
+        ${savedRestaurants.map(r=>`<span class="flex items-center gap-1 text-xs bg-white rounded-full pl-2 pr-1 py-1.5 border border-[#E7DFC9]">
+          <button onclick="addFromSaved('${r.id}')" class="font-semibold" style="color:#1F1B16">+ ${esc(r.name)}</button>
+          ${isAdmin?`<button onclick="deleteSavedRestaurant('${r.id}','${esc(r.name)}')" class="text-[#B3432B]">✕</button>`:''}
+        </span>`).join('')}
+      </div>` : ''}
+    ` : ''}` : ''}
     ${opts.length===0? '<p class="text-sm text-[#9C9080] text-center py-4">لسه مفيش مطاعم مضافة</p>' : optionsHtml}
     ${!votingLocked? '<p class="text-xs text-[#9C9080] text-center mt-2">التصويت مفتوح طول الوقت، والمطعم اللي فوق (👑) بيتحدّث أوتوماتيك حسب الأصوات</p>':''}
   </div>`;
 }
 function toggleVotingLock(){ db.ref(`sessions/${sid}/meta`).update({ votingLocked: !meta.votingLocked }); }
 function toggleOptionsLock(){ db.ref(`sessions/${sid}/meta`).update({ optionsLocked: !meta.optionsLocked }); }
+function toggleSavedPanel(){ showSavedPanel=!showSavedPanel; renderTab(); }
 function setMenuType(t){ newOption.menuType=t; renderTab(); }
 async function handleMenuFile(ev){
   const file = ev.target.files[0]; if(!file) return;
@@ -523,8 +546,25 @@ function addOption(){
   const name = (newOption.name||'').trim(); if(!name) return;
   const opt = { id: uid(), name, menuType:newOption.menuType, menuValue:newOption.menuValue, menuFileType:newOption.menuFileType };
   db.ref(`sessions/${sid}/meta/restaurantOptions`).set([...(meta.restaurantOptions||[]), opt]);
+  const saveCb = document.getElementById('saveOptionCheckbox');
+  if(saveCb && saveCb.checked && !savedRestaurants.some(r=>r.name===name)){
+    const savedId = uid();
+    db.ref(`savedRestaurants/${savedId}`).set({ id:savedId, name, menuType:opt.menuType, menuValue:opt.menuValue, menuFileType:opt.menuFileType, createdAt: Date.now() });
+  }
   newOption = { name:'', menuType:'none', menuValue:'', menuFileType:'' };
   const nameEl = document.getElementById('optNameInputField'); if(nameEl) nameEl.value='';
+}
+function addFromSaved(rid){
+  if(meta.optionsLocked && !isAdmin) return;
+  const r = savedRestaurants.find(x=>x.id===rid); if(!r) return;
+  if((meta.restaurantOptions||[]).some(o=>o.name===r.name)){ showToast('موجود بالفعل', 'المطعم ده مضاف في تصويت النهاردة'); return; }
+  const opt = { id: uid(), name:r.name, menuType:r.menuType||'none', menuValue:r.menuValue||'', menuFileType:r.menuFileType||'' };
+  db.ref(`sessions/${sid}/meta/restaurantOptions`).set([...(meta.restaurantOptions||[]), opt]);
+}
+function deleteSavedRestaurant(rid, name){
+  if(!isAdmin) return;
+  if(!confirm(`تمسح "${name}" من قائمة المطاعم المحفوظة؟`)) return;
+  db.ref(`savedRestaurants/${rid}`).remove();
 }
 function castVote(id){ if(meta.votingLocked && !isAdmin) return; updateMe({ vote:id }); }
 function deleteOption(id, name){
@@ -561,6 +601,7 @@ function renderOrdering(){
         </div>`).join('')}
     </div>
   </div>
+  ${isAdmin? `
   <div class="card p-4">
     <h3 class="font-bold mb-2 text-sm" style="color:#1F1B16">طلبات الكل (${orders.length})</h3>
     <div class="space-y-2 max-h-96 overflow-y-auto">
@@ -570,12 +611,15 @@ function renderOrdering(){
           <div class="flex flex-wrap gap-1.5">
           ${p.items.map(i=>`<span class="text-xs bg-[#F3EEE1] rounded-full px-2 py-1 flex items-center gap-1">
             ${esc(i.desc)} ×${i.qty}
-            ${isAdmin?`<button onclick="editItemAdmin('${p.id}','${i.id}')" class="text-[#6B5F4D]">✎</button><button onclick="removeItem('${p.id}','${i.id}')" class="text-[#B3432B]">✕</button>`:''}
+            <button onclick="editItemAdmin('${p.id}','${i.id}')" class="text-[#6B5F4D]">✎</button><button onclick="removeItem('${p.id}','${i.id}')" class="text-[#B3432B]">✕</button>
           </span>`).join('')}
           </div>
         </div>`).join('')}
     </div>
-  </div>`;
+  </div>` : `
+  <div class="card p-3 text-center">
+    <p class="text-xs text-[#9C9080]">طلبك بس اللي ظاهر ليك — الأدمن هو اللي شايف طلبات الكل</p>
+  </div>`}`;
 }
 function numFocus(el){
   if(el.value==='0' || el.value==='0.00' || Number(el.value)===0){ el.value=''; }
