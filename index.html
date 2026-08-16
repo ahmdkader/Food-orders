@@ -44,7 +44,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* باسورد الأدمن — غيّره لأي حاجة تانية قبل ما ترفع المشروع */
-const ADMIN_PASSWORD = "admin";
+const ADMIN_PASSWORD = "غيّر-الباسورد-ده";
 
 const EMOJI_AVATARS = ['😀','😎','🤓','🥳','😺','🐶','🦊','🐼','🦁','🐸','🐵','🐷','🍕','🍔','🌮','🍩','⚡','🔥','🌟','💪','🚀','🎯','🎧','☕'];
 
@@ -339,12 +339,15 @@ function currentRestaurantName(){
   return opt ? opt.name : 'لسه معروفش';
 }
 function deliveryShare(){ const n=participants().length; return n>0 ? (meta.deliveryFee||0)/n : 0; }
-function personTotal(p){
+/* pure version that never touches global state - safe to use for the live session AND for history entries */
+function computeTotal(p, m, allPeople){
   const subtotal = (p.items||[]).reduce((s,i)=>s+i.price*i.qty,0);
-  const tax = meta.taxEnabled ? subtotal*(meta.taxPercent||0)/100 : 0;
-  const delivery = (p.items&&p.items.length>0) ? deliveryShare() : 0;
+  const tax = m.taxEnabled ? subtotal*(m.taxPercent||0)/100 : 0;
+  const n = (allPeople||[]).filter(x=>x.items && x.items.length>0).length;
+  const delivery = (p.items && p.items.length>0 && n>0) ? (m.deliveryFee||0)/n : 0;
   return { subtotal, tax, delivery, total: subtotal+tax+delivery };
 }
+function personTotal(p){ return computeTotal(p, meta, Object.values(people)); }
 function avatarHtml(p, size){
   size = size || 32;
   if(p && p.avatar && p.avatar.type==='emoji'){
@@ -582,9 +585,14 @@ function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 /* ---------------- ORDERING (always live) ---------------- */
 function renderOrdering(){
   const orders = participants();
+  const myQtyTotal = me().items.reduce((s,i)=>s+(i.qty||0),0);
+  const allQtyTotal = orders.reduce((s,p)=>s+p.items.reduce((s2,i)=>s2+(i.qty||0),0),0);
   return `
   <div class="card p-4 mb-4">
-    <h2 class="font-bold mb-1" style="color:#1F1B16">🛍️ طلبك (${esc(currentRestaurantName())})</h2>
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="font-bold" style="color:#1F1B16">🛍️ طلبك (${esc(currentRestaurantName())})</h2>
+      ${myQtyTotal>0? `<span class="text-xs font-bold bg-[#F3EEE1] rounded-full px-2.5 py-1" style="color:#1F1B16">إجمالي طلبك: ${myQtyTotal}</span>`:''}
+    </div>
     <p class="text-xs text-[#9C9080] mb-3">اكتب كل صنف عايزه، السعر هيتحدد بعدين</p>
     <div class="flex gap-2 mb-3">
       <input id="itemDescInputField" value="${esc(itemDesc)}" oninput="itemDesc=this.value" onkeydown="if(event.key==='Enter')addItem()" placeholder="مثال: ساندوتش فراخ بانيه"
@@ -603,7 +611,10 @@ function renderOrdering(){
   </div>
   ${isAdmin? `
   <div class="card p-4">
-    <h3 class="font-bold mb-2 text-sm" style="color:#1F1B16">طلبات الكل (${orders.length})</h3>
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-bold text-sm" style="color:#1F1B16">طلبات الكل (${orders.length} شخص)</h3>
+      <span class="text-xs font-bold bg-[#FDF0CC] rounded-full px-2.5 py-1" style="color:#1F1B16">إجمالي الأصناف: ${allQtyTotal}</span>
+    </div>
     <div class="space-y-2 max-h-96 overflow-y-auto">
       ${orders.map(p=>`
         <div class="border-b border-dashed border-[#E7DFC9] pb-2 last:border-0">
@@ -691,6 +702,10 @@ function renderBilling(){
     <h3 class="font-bold mb-2 text-sm" style="color:#E3A008">ملخص الحساب</h3>
     <div class="space-y-1 text-sm">
       ${orders.map(p=>{ const t=personTotal(p); return `<div class="flex justify-between"><span>${esc(p.name)}</span><span class="num">${t.total.toFixed(2)} ج</span></div>`; }).join('')}
+    </div>
+    <div class="flex justify-between font-bold text-base pt-2 mt-2 border-t border-[#4A4033]">
+      <span>الإجمالي الكلي (أكل + ضريبة + توصيل)</span>
+      <span class="num" style="color:#E3A008">${orders.reduce((s,p)=>s+personTotal(p).total,0).toFixed(2)} ج</span>
     </div>
   </div>`;
 }
@@ -787,10 +802,7 @@ function historyRestaurantName(entry){
   return opt ? opt.name : (entry.meta.restaurantOptions&&entry.meta.restaurantOptions[0]? entry.meta.restaurantOptions[0].name : '-');
 }
 function historyTotal(entry){
-  const savedMeta = meta; meta = entry.meta;
-  const total = entry.people.reduce((s,p)=>s+personTotal(p).total,0);
-  meta = savedMeta;
-  return total;
+  return entry.people.reduce((s,p)=>s+computeTotal(p, entry.meta, entry.allPeople).total, 0);
 }
 function renderHistory(){
   if(historyList.length===0) return `<div class="card p-6 text-center text-[#9C9080]">مفيش هيستوري لسه</div>`;
@@ -812,10 +824,9 @@ function renderHistory(){
 }
 function showHistoryDetail(hid){
   const entry = historyList.find(h=>h.id===hid); if(!entry) return;
-  const savedMeta = meta; meta = entry.meta;
-  const grand = entry.people.reduce((s,p)=>s+personTotal(p).total,0);
+  const grand = entry.people.reduce((s,p)=>s+computeTotal(p, entry.meta, entry.allPeople).total, 0);
   const rows = entry.people.map(p=>{
-    const t = personTotal(p);
+    const t = computeTotal(p, entry.meta, entry.allPeople);
     const itemsLine = p.items.map(i=>`${esc(i.desc)} ×${i.qty} (${(i.price*i.qty).toFixed(2)} ج)`).join('، ');
     return `<div class="border-b border-dashed border-[#E7DFC9] pb-2 mb-2 last:border-0">
       <div class="flex items-center justify-between">
@@ -823,9 +834,9 @@ function showHistoryDetail(hid){
         <span class="num text-sm font-bold" style="color:#1F1B16">${t.total.toFixed(2)} ج ${p.paid?'<span style=\"color:#2F6B4F\">✓ مدفوع</span>':'<span style=\"color:#B3432B\">✗ لسه</span>'}</span>
       </div>
       <p class="text-xs text-[#9C9080] mt-1">${itemsLine}</p>
+      <p class="text-[10px] text-[#B8AD97] mt-0.5">أكل: ${t.subtotal.toFixed(2)} ج${entry.meta.taxEnabled?` · ضريبة: ${t.tax.toFixed(2)} ج`:''} · توصيل: ${t.delivery.toFixed(2)} ج</p>
     </div>`;
   }).join('');
-  meta = savedMeta;
   document.getElementById('modalRoot').innerHTML = `
   <div class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-30" onclick="closeModal()">
     <div class="card p-5 max-w-md w-full" style="background:#FAF6EE;max-height:85vh;overflow-y-auto" onclick="event.stopPropagation()">
